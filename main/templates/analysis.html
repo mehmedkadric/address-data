@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<h4 class="center-align teal-text">Data Analysis Dashboard</h4>
+
+<div class="row">
+  <form method="get" class="col s12">
+    <div class="row">
+      <div class="input-field col s6">
+        <input type="text" id="reference_address" name="reference_address" value="{{ reference_address }}">
+        <label for="reference_address" class="#">Reference Address</label>
+        <span class="helper-text">E.g. "hitna pomoc sarajevo"</span>
+      </div>
+      <div class="input-field col s3">
+        <input type="number" step="0.1" id="distance_threshold" name="distance_threshold" value="{{ distance_threshold }}">
+        <label for="distance_threshold" class="active">Distance Threshold (km)</label>
+      </div>
+      <div class="input-field col s3">
+        <button type="submit" class="btn teal waves-effect waves-light">Update</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- City Frequency Chart -->
+<div class="row">
+  <div class="col s12 m6">
+    <h5>City Frequency</h5>
+    <canvas id="cityChart"></canvas>
+    <p class="grey-text">Unknown count: {{ city_unknown_count }} ({{ city_unknown_percentage }}%)</p>
+  </div>
+
+  <div class="col s12 m6">
+    <h5>Road Frequency</h5>
+    <canvas id="roadChart"></canvas>
+    <p class="grey-text">Unknown count: {{ road_unknown_count }} ({{ road_unknown_percentage }}%)</p>
+  </div>
+</div>
+
+<!-- Field Frequency with Dropdown -->
+<div class="row">
+  <div class="col s12 m6">
+    <h5>Frequency by Field</h5>
+    <div class="input-field col s12" style="padding-left:0;">
+      <select id="fieldSelect">
+        {% for f in fields_available %}
+        <option value="{{ f }}"{% if f == default_field %} selected{% endif %}>{{ f|title }}</option>
+        {% endfor %}
+      </select>
+      <label>Select Field</label>
+    </div>
+    <canvas id="fieldChart"></canvas>
+    <p id="fieldUnknownInfo" class="grey-text"></p>
+  </div>
+
+  <div class="col s12 m6">
+    <h5>Distance Distribution</h5>
+    <canvas id="distanceChart"></canvas>
+  </div>
+</div>
+
+<!-- Addresses Near Reference Point Table -->
+<h5>Addresses Within Threshold ({{distance_threshold}} km)</h5>
+<table class="striped tablesort" id="closePointsTable">
+  <thead>
+    <tr>
+      <th>Address</th>
+      <th>Display Name</th>
+      <th data-sort-method="number">Distance (km)</th>
+    </tr>
+  </thead>
+  <tbody id="closePointsBody">
+  </tbody>
+</table>
+
+<h5>Map Visualization</h5>
+<div id="analysis-map" style="height:400px; margin-bottom:20px;"></div>
+
+{% endblock %}
+
+{% block javascript %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const cityLabels = {{ city_labels|safe }};
+    const cityData = {{ city_data|safe }};
+    const roadLabels = {{ road_labels|safe }};
+    const roadData = {{ road_data|safe }};
+
+    const cityCtx = document.getElementById('cityChart').getContext('2d');
+    new Chart(cityCtx, {
+      type: 'bar',
+      data: {
+        labels: cityLabels,
+        datasets: [{
+          label: 'Count',
+          data: cityData,
+          backgroundColor: 'rgba(54,162,235,0.5)'
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: 'City' } },
+          y: { title: { display: true, text: 'Frequency' }, beginAtZero: true }
+        }
+      }
+    });
+
+    const roadCtx = document.getElementById('roadChart').getContext('2d');
+    new Chart(roadCtx, {
+      type: 'bar',
+      data: {
+        labels: roadLabels,
+        datasets: [{
+          label: 'Count',
+          data: roadData,
+          backgroundColor: 'rgba(75,192,192,0.5)'
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: 'Road' } },
+          y: { title: { display: true, text: 'Frequency' }, beginAtZero: true }
+        }
+      }
+    });
+
+    // Field frequency data
+    const fieldData = {{ field_frequency|safe }};
+    const defaultField = '{{ default_field }}';
+
+    const fieldCtx = document.getElementById('fieldChart').getContext('2d');
+    const fieldSelect = document.getElementById('fieldSelect');
+    const fieldUnknownInfo = document.getElementById('fieldUnknownInfo');
+
+    let fieldChart = new Chart(fieldCtx, {
+      type: 'bar',
+      data: {
+        labels: fieldData[defaultField].labels,
+        datasets: [{
+          label: 'Count',
+          data: fieldData[defaultField].data,
+          backgroundColor: 'rgba(255,159,64,0.5)'
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: defaultField } },
+          y: { title: { display: true, text: 'Frequency' }, beginAtZero: true }
+        }
+      }
+    });
+
+    function updateFieldChart(field) {
+      fieldChart.data.labels = fieldData[field].labels;
+      fieldChart.data.datasets[0].data = fieldData[field].data;
+      fieldChart.options.scales.x.title.text = field;
+      fieldChart.update();
+
+      const unknownCount = fieldData[field].unknown_count;
+      const total = fieldData[field].total;
+      const unknownPercent = total > 0 ? ((unknownCount / total) * 100).toFixed(2) : 0;
+      fieldUnknownInfo.textContent = `Unknown count: ${unknownCount} (${unknownPercent}%)`;
+    }
+
+    fieldSelect.addEventListener('change', function () {
+      updateFieldChart(this.value);
+    });
+
+    updateFieldChart(defaultField);
+
+    // Distance distribution
+    const distanceBins = {{ distance_bins|safe }};
+    const distanceData = {{ distance_bin_counts|safe }};
+    const distCtx = document.getElementById('distanceChart').getContext('2d');
+    new Chart(distCtx, {
+      type: 'bar',
+      data: {
+        labels: distanceBins,
+        datasets: [{
+          label: 'Count',
+          data: distanceData,
+          backgroundColor: 'rgba(153,102,255,0.5)'
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: 'Distance Ranges (km)' } },
+          y: { title: { display: true, text: 'Frequency' }, beginAtZero: true }
+        }
+      }
+    });
+
+    // Points on map
+    const closePoints = {{ close_points|safe }};
+    const allPoints = {{ all_points|safe }};
+    const refLat = {{ ref_lat }};
+    const refLon = {{ ref_lon }};
+    const map = L.map('analysis-map').setView([refLat, refLon], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Plot close points
+    const closePointsBody = document.getElementById('closePointsBody');
+    closePoints.forEach((p) => {
+      L.circle([p.lat, p.lon], { radius: 100, color: 'red' })
+        .addTo(map)
+        .bindPopup(`Address: <b>${p.address}</b><br>DisplayName: <b>${p.displayName}</b><br>Distance: <b>${p.distance} km</b>`);
+
+      const row = document.createElement('tr');
+      row.innerHTML = `<td>${p.address}</td><td>${p.displayName}</td><td>${p.distance}</td>`;
+      closePointsBody.appendChild(row);
+    });
+
+    // Initialize Materialize components
+    var elems = document.querySelectorAll('select');
+    M.FormSelect.init(elems);
+
+    var collapsibles = document.querySelectorAll('.collapsible');
+    M.Collapsible.init(collapsibles);
+
+    // Initialize Tablesort
+    const tables = document.querySelectorAll('table.tablesort');
+    tables.forEach((table) => {
+      new Tablesort(table);
+    });
+  });
+</script>
+{% endblock %}
