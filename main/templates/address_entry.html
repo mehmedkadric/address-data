@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+
+<a href="{% url 'address_entry' %}"><h4 class="center-align teal-text">Data Entry</h4></a>
+
+<div class="row">
+  <form method="post" class="col s12" id="add-form">
+    {% csrf_token %}
+    <div class="input-field col s10">
+      <i class="material-icons prefix">location_on</i>
+      {{ form.address }}
+      <label for="id_address">Enter Address</label>
+    </div>
+    <div class="input-field col s2">
+      <button type="submit" class="btn teal waves-effect waves-light" id="add-button">
+        <span id="add-button-text">Add</span>
+        <div id="spinner" class="preloader-wrapper small active" style="display: none;">
+          <div class="spinner-layer spinner-blue-only">
+            <div class="circle-clipper left">
+              <div class="circle"></div>
+            </div>
+            <div class="gap-patch">
+              <div class="circle"></div>
+            </div>
+            <div class="circle-clipper right">
+              <div class="circle"></div>
+            </div>
+          </div>
+        </div>
+      </button>
+    </div>
+  </form>
+</div>
+
+<h5> Existing Addresses <span class="new badge" data-badge-caption="addresses">{{parsed_addresses|length}}</span></h5>
+
+{% if not queries %}
+  <p class="center-align">No addresses added yet.</p>
+{% else %}
+<ul class="collapsible popout">
+  {% for query in parsed_addresses %}
+  <li>
+    <div class="collapsible-header">
+      <i class="material-icons {% if query.query.nominatim_coordinates %} teal-text {% endif %}">location_on</i>
+
+      <span> <span class="badge">{{forloop.counter}} {{ query.query.address }}</span></span>
+
+      <span title="Time" class="badge">{{ query.query.timestamp|date:"M d, Y H:i" }}</span>
+
+      <a href="{% url 'delete_query' query.query.id %}" title="Delete" class="teal-text text-lighten-3 waves-effect">
+        <i class="material-icons right">delete</i>
+      </a>
+    </div>
+    <div class="collapsible-body">
+
+      <p><strong>Details:</strong></p>
+      <ul class="collection">
+        <li class="collection-item"><i>Query:</i> <strong>{{query.query.address}}</strong></li>
+        <li class="collection-item"><i>Nominatim Display Name: </i> <strong>{{query.query.nominatim_display_name}}</strong></li>
+        <li class="collection-item"><i>Nominatim Coordinates: </i> <strong>{{query.query.nominatim_coordinates}}</strong></li>
+      </ul>
+
+      <table id="entryTable" class="highlight responsive-table">
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if query.house %}<tr><td>House</td><td>{{ query.house }}</td></tr>{% endif %}
+          {% if query.category %}<tr><td>Category</td><td>{{ query.category }}</td></tr>{% endif %}
+          {% if query.near %}<tr><td>Near</td><td>{{ query.near }}</td></tr>{% endif %}
+          {% if query.house_number %}<tr><td>House Number</td><td>{{ query.house_number }}</td></tr>{% endif %}
+          {% if query.road %}<tr><td>Road</td><td>{{ query.road }}</td></tr>{% endif %}
+          {% if query.unit %}<tr><td>Unit</td><td>{{ query.unit }}</td></tr>{% endif %}
+          {% if query.level %}<tr><td>Level</td><td>{{ query.level }}</td></tr>{% endif %}
+          {% if query.staircase %}<tr><td>Staircase</td><td>{{ query.staircase }}</td></tr>{% endif %}
+          {% if query.entrance %}<tr><td>Entrance</td><td>{{ query.entrance }}</td></tr>{% endif %}
+          {% if query.po_box %}<tr><td>PO Box</td><td>{{ query.po_box }}</td></tr>{% endif %}
+          {% if query.postcode %}<tr><td>Postcode</td><td>{{ query.postcode }}</td></tr>{% endif %}
+          {% if query.suburb %}<tr><td>Suburb</td><td>{{ query.suburb }}</td></tr>{% endif %}
+          {% if query.city_district %}<tr><td>City District</td><td>{{ query.city_district }}</td></tr>{% endif %}
+          {% if query.city %}<tr><td>City</td><td>{{ query.city }}</td></tr>{% endif %}
+          {% if query.island %}<tr><td>Island</td><td>{{ query.island }}</td></tr>{% endif %}
+          {% if query.state_district %}<tr><td>State District</td><td>{{ query.state_district }}</td></tr>{% endif %}
+          {% if query.state %}<tr><td>State</td><td>{{ query.state }}</td></tr>{% endif %}
+          {% if query.country_region %}<tr><td>Country Region</td><td>{{ query.country_region }}</td></tr>{% endif %}
+          {% if query.country %}<tr><td>Country</td><td>{{ query.country }}</td></tr>{% endif %}
+          {% if query.world_region %}<tr><td>World Region</td><td>{{ query.world_region }}</td></tr>{% endif %}
+        </tbody>
+      </table>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<div id="map" style="height: 400px; margin-bottom: 20px;"></div>
+
+{% endblock %}
+
+{% block javascript %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // Initialize collapsible
+    const elems = document.querySelectorAll('.collapsible');
+    M.Collapsible.init(elems);
+
+    // Initialize map
+    const map = L.map('map').setView([43.8563, 18.4131], 13); // Default Sarajevo coordinates
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    const geocodedData = JSON.parse('{{ parsed_addresses_arr|escapejs|safe }}');
+
+    geocodedData.forEach((data) => {
+      const lat = data['lat'];
+      const lon = data['lon'];
+      const displayName = data['displayName'];
+      const query = data['query'];
+
+      if (lat && lon) {
+        L.circle([lat, lon], { radius: 100, color: 'blue' })
+          .addTo(map)
+          .bindPopup(`Query: <b>${query}</b></br>Nominatim Display Name: <b>${displayName}</b>`);
+      }
+    });
+
+    // Spinner logic
+    const addButton = document.getElementById('add-button');
+    const form = document.getElementById('add-form');
+
+    form.addEventListener('submit', function () {
+      const spinner = document.getElementById('spinner');
+      const buttonText = document.getElementById('add-button-text');
+      buttonText.style.display = 'none';
+      spinner.style.display = 'inline-block';
+      addButton.disabled = true;
+    });
+  });
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const table = document.querySelector('#entryTable');
+
+    if (table) {
+        new Tablesort(table);
+    } else {
+        console.error("Table with ID 'entryTable' not found.");
+    }
+});
+</script>
+{% endblock %}

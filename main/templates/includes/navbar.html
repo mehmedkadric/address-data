@@ -1,0 +1,26 @@
+<header>
+    <div class="navbar-fixed">
+        <div class="row">
+            <nav>
+                <div class="nav-wrapper teal">
+                    <div class="col s12">
+                        <a href="{% url 'address_entry' %}" class="brand-logo" style="white-space: nowrap;">
+                          Address Data
+                        </a>
+                        <a href="{% url 'address_entry' %}" data-target="mobile-demo" class="sidenav-trigger"><i
+                                class="material-icons">menu</i></a>
+                        <ul class="right hide-on-med-and-down">
+                            <li><a href="{% url 'address_entry' %}">Data Entry</a></li>
+                            <li><a href="{% url 'analysis' %}">Analysis</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </div>
+
+    <ul class="sidenav" id="mobile-demo">
+        <li><a href="{% url 'address_entry' %}">Data Entry</a></li>
+        <li><a href="{% url 'analysis' %}">Analysis</a></li>
+    </ul>
+</header>

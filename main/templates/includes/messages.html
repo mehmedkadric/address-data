@@ -1,0 +1,17 @@
+{% if messages %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+      {% for message in messages %}
+      {% if message.tags == 'success' %}
+      M.toast({ html: "{{ message|escapejs }}", classes: 'green rounded', displayLength: 5000 });
+      {% elif message.tags == 'info' %}
+      M.toast({ html: "{{ message|escapejs }}", classes: 'blue rounded', displayLength: 2500 });
+      {% elif message.tags == 'warning' %}
+      M.toast({ html: "{{ message|escapejs }}", classes: 'orange rounded', displayLength: 10000 });
+      {% elif message.tags == 'error' %}
+      M.toast({ html: "{{ message|escapejs }}", classes: 'red rounded', displayLength: 10000 });
+      {% endif %}
+      {% endfor %}
+    });
+</script>
+{% endif %}
